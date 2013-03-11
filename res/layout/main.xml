@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<org.dobots.robotalk.user.utility.LockableScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/scrollview"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="fill" >
+    
+	<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	    android:layout_width="fill_parent"
+	    android:layout_height="fill_parent"
+	    android:orientation="vertical" >
+	    
+	    <FrameLayout
+	        xmlns:android="http://schemas.android.com/apk/res/android"
+	        android:layout_width="match_parent"
+	        android:layout_height="wrap_content"
+	        android:layout_gravity="center"
+	        android:orientation="vertical" >
+		        
+		    <org.dobots.robotalk.user.utility.gui.ScalableImageView
+		        android:id="@+id/svVideo"
+			    android:scaleType="fitCenter" 
+			    android:layout_gravity="center_horizontal" 
+			    android:layout_height="wrap_content" 
+			    android:layout_width="match_parent" 
+			    android:adjustViewBounds="true" />
+		    		    
+		    <TextView 
+		        android:id="@+id/lblFPS"
+			    android:scaleType="fitCenter"
+		        android:layout_width="match_parent"
+		        android:layout_height="match_parent"
+	            android:textColor="#e0ff0000"
+	            android:textSize="24sp" />
+	        
+	    </FrameLayout>
+    
+	    <include 
+	        android:id="@+id/layRemoteControl"
+	        layout="@layout/remote_control"
+	        />
+	    
+	</LinearLayout>
+
+</org.dobots.robotalk.user.utility.LockableScrollView>
