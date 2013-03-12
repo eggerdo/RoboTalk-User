@@ -32,7 +32,7 @@ public class VideoHandler {
     private int m_nFpsCounterPartner = 0;
     private long m_lLastTimePartner = System.currentTimeMillis();
 
-    private boolean m_bDebug;
+    private boolean m_bDebug = true;
     
     // on startup don't display the video of anybody, but wait until a partner is selected
     private String m_strRobotName = "nobody";
@@ -106,7 +106,7 @@ public class VideoHandler {
 
 			// obtain video ports from settings
 			// receive port is always equal to send port + 1
-			int nVideoRecvPort = m_oSettings.getVideoPort();
+			int nVideoRecvPort = m_oSettings.getVideoPort() + 1;
 			
 			m_oVideoReceiver.connect(String.format("tcp://%s:%d", m_oSettings.getAddress(), nVideoRecvPort));
 			

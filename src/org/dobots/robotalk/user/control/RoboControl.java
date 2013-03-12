@@ -3,6 +3,8 @@ package org.dobots.robotalk.user.control;
 import org.dobots.robotalk.user.control.RemoteControlHelper.Move;
 import org.dobots.robotalk.user.msg.RoboCommands;
 import org.dobots.robotalk.user.msg.RoboCommands.BaseCommand;
+import org.dobots.robotalk.user.msg.RoboCommands.CameraCommand;
+import org.dobots.robotalk.user.msg.RoboCommands.CameraCommandType;
 import org.dobots.robotalk.user.msg.RoboCommands.DriveCommand;
 
 import android.util.Log;
@@ -12,7 +14,7 @@ public class RoboControl implements RemoteControlListener {
 	private static final String TAG = "RoboControl";
 	
 	// if this is sent as speed the controller will chose
-	// a predefined base speed for the correspondig move
+	// a predefined base speed for the corresponding move
 	private static final int BASE_SPEED = -1;
 	
 	private CommandHandler m_oCmdHandler;
@@ -33,71 +35,11 @@ public class RoboControl implements RemoteControlListener {
 		// where -90 is left and +90 is right
 		i_dblAngle -= 90.0;
 		
-		// execute this move
-		switch(i_oMove) {
-		case NONE:
-			sendMoveStop();
-			Log.i(TAG, "stop()");
-			break;
-		case BACKWARD:
-			sendMoveBackward(i_dblSpeed, i_dblAngle);
-			Log.i(TAG, String.format("bwd(s=%f, a=%f)", i_dblSpeed, i_dblAngle));
-			break;
-		case STRAIGHT_BACKWARD:
-			sendMoveBackward(i_dblSpeed);
-			Log.i(TAG, String.format("bwd(s=%f)", i_dblSpeed));
-			break;
-		case FORWARD:
-			sendMoveForward(i_dblSpeed, i_dblAngle);
-			Log.i(TAG, String.format("fwd(s=%f, a=%f)", i_dblSpeed, i_dblAngle));
-			break;
-		case STRAIGHT_FORWARD:
-			sendMoveForward(i_dblSpeed);
-			Log.i(TAG, String.format("fwd(s=%f)", i_dblSpeed));
-			break;
-		case LEFT:
-			sendRotateCounterClockwise(i_dblSpeed);
-			Log.i(TAG, String.format("c cw(s=%f)", i_dblSpeed));
-			break;
-		case RIGHT:
-			sendRotateClockwise(i_dblSpeed);
-			Log.i(TAG, String.format("cw(s=%f)", i_dblSpeed));
-			break;
-		}
+		sendMove(i_oMove, i_dblSpeed, i_dblAngle);
 	}
-
-	private void sendRotateClockwise(double i_dblSpeed) {
-		DriveCommand oCmd = RoboCommands.createDriveCommand(Move.RIGHT, i_dblSpeed);
-		sendCommand(oCmd);
-	}
-
-	private void sendRotateCounterClockwise(double i_dblSpeed) {
-		DriveCommand oCmd = RoboCommands.createDriveCommand(Move.LEFT, i_dblSpeed);
-		sendCommand(oCmd);
-	}
-
-	private void sendMoveForward(double i_dblSpeed) {
-		DriveCommand oCmd = RoboCommands.createDriveCommand(Move.STRAIGHT_FORWARD, i_dblSpeed);
-		sendCommand(oCmd);
-	}
-
-	private void sendMoveForward(double i_dblSpeed, double i_dblAngle) {
-		DriveCommand oCmd = RoboCommands.createDriveCommand(Move.FORWARD, i_dblSpeed, i_dblAngle);
-		sendCommand(oCmd);
-	}
-
-	private void sendMoveBackward(double i_dblSpeed) {
-		DriveCommand oCmd = RoboCommands.createDriveCommand(Move.STRAIGHT_BACKWARD, i_dblSpeed);
-		sendCommand(oCmd);
-	}
-
-	private void sendMoveBackward(double i_dblSpeed, double i_dblAngle) {
-		DriveCommand oCmd = RoboCommands.createDriveCommand(Move.BACKWARD, i_dblSpeed, i_dblAngle);
-		sendCommand(oCmd);
-	}
-
-	private void sendMoveStop() {
-		DriveCommand oCmd = RoboCommands.createDriveCommand(Move.NONE, 0);
+	
+	private void sendMove(Move i_eMove, double i_dblSpeed, double i_dblAngle) {
+		DriveCommand oCmd = RoboCommands.createDriveCommand(i_eMove, i_dblSpeed, i_dblAngle);
 		sendCommand(oCmd);
 	}
 
@@ -105,46 +47,7 @@ public class RoboControl implements RemoteControlListener {
 	// callback function when the arrow keys are used
 	public void onMove(Move i_oMove) {
 		// execute this move
-		switch(i_oMove) {
-		case NONE:
-			sendMoveStop();
-			Log.i(TAG, "stop()");
-			break;
-		case STRAIGHT_BACKWARD:
-		case BACKWARD:
-			sendMoveBackward();
-			Log.i(TAG, "bwd()");
-			break;
-		case STRAIGHT_FORWARD:
-		case FORWARD:
-			sendMoveForward();
-			Log.i(TAG, "fwd()");
-			break;
-		case LEFT:
-			sendRotateCounterClockwise();
-			Log.i(TAG, "c cw()");
-			break;
-		case RIGHT:
-			sendRotateClockwise();
-			Log.i(TAG, "cw()");
-			break;
-		}
-	}
-
-	private void sendRotateClockwise() {
-		sendRotateClockwise(BASE_SPEED);
-	}
-
-	private void sendRotateCounterClockwise() {
-		sendRotateCounterClockwise(BASE_SPEED);
-	}
-
-	private void sendMoveForward() {
-		sendMoveForward(BASE_SPEED);
-	}
-
-	private void sendMoveBackward() {
-		sendMoveBackward(BASE_SPEED);
+		sendMove(i_oMove, BASE_SPEED, 0.0);
 	}
 
 	@Override
@@ -153,5 +56,19 @@ public class RoboControl implements RemoteControlListener {
 		// controller
 	}
 
+	public void toggleCamera() {
+		CameraCommand oCmd = RoboCommands.createCameraCommand(CameraCommandType.cameraToggle);
+		sendCommand(oCmd);
+	}
+	
+	public void switchCameraOn() {
+		CameraCommand oCmd = RoboCommands.createCameraCommand(CameraCommandType.cameraOn);
+		sendCommand(oCmd);
+	}
+
+	public void switchCameraOff() {
+		CameraCommand oCmd = RoboCommands.createCameraCommand(CameraCommandType.cameraOff);
+		sendCommand(oCmd);
+	}
 
 }

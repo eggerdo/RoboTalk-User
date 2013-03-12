@@ -108,7 +108,7 @@ public class RemoteControlHelper implements JoystickListener {
 					case MotionEvent.ACTION_POINTER_UP:
 						break;
 					case MotionEvent.ACTION_DOWN:
-						m_oRemoteControlListener.onMove(Move.FORWARD);
+						m_oRemoteControlListener.onMove(Move.STRAIGHT_FORWARD);
 						break;
 					case MotionEvent.ACTION_POINTER_DOWN:
 						break;					
@@ -133,7 +133,7 @@ public class RemoteControlHelper implements JoystickListener {
 					case MotionEvent.ACTION_POINTER_UP:
 						break;
 					case MotionEvent.ACTION_DOWN:
-						m_oRemoteControlListener.onMove(Move.BACKWARD);
+						m_oRemoteControlListener.onMove(Move.STRAIGHT_BACKWARD);
 						break;
 					case MotionEvent.ACTION_POINTER_DOWN:
 						break;					
