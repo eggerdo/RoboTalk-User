@@ -4,8 +4,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.dobots.robotalk.control.CommandHandler;
-import org.dobots.robotalk.control.RemoteControlHelper;
-import org.dobots.robotalk.control.RoboControl;
+import org.dobots.robotalk.control.ZmqRemoteControl;
+import org.dobots.robotalk.control.ZmqRemoteListener;
 import org.dobots.robotalk.video.VideoDisplayThread;
 import org.dobots.robotalk.video.VideoDisplayThread.FPSListener;
 import org.dobots.robotalk.video.VideoDisplayThread.VideoListener;
@@ -64,8 +64,7 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 	private boolean m_bSessionStarted = false;
 
 	// control
-	private RemoteControlHelper m_oRemoteCtrl;
-	private RoboControl m_oControl;
+	private ZmqRemoteControl m_oRemoteCtrl;
 	
 	private Camera camera;
 
@@ -89,6 +88,7 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 	// display it normally on the screen
 	private int nRotation = -90;
 	private VideoDisplayThread m_oVideoDisplayer;
+	private ZmqRemoteListener m_oZmqRemoteListener;
 	
     /** Called when the activity is first created. */
     @Override
@@ -116,10 +116,11 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
         m_oVideoHandler = new VideoHandler(m_oZmqHandler.getContext());
 
     	m_oCommandHandler = new CommandHandler(m_oZmqHandler);
-        m_oControl = new RoboControl(m_oCommandHandler);
+    	m_oZmqRemoteListener = new ZmqRemoteListener(m_oCommandHandler);
 
-		m_oRemoteCtrl = new RemoteControlHelper(this, null, m_oControl);
+		m_oRemoteCtrl = new ZmqRemoteControl(this, null, m_oZmqRemoteListener);
         m_oRemoteCtrl.setProperties();
+        m_oRemoteCtrl.setCameraControlListener(m_oZmqRemoteListener);
 
         if (m_oSettings.isValid()) {
             setupConnections();
@@ -141,7 +142,21 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 
 	private void setupConnections() {
 		setupVideoConnection();
-		m_oCommandHandler.setupConnections();
+		setupCommandConnection();
+	}
+	
+	private void setupCommandConnection() {
+		
+		ZMQ.Socket oExt_CommandOut = m_oZmqHandler.createSocket(ZMQ.PUSH);
+		
+		// obtain command ports from settings
+		// receive port is always equal to send port + 1
+		int nCommandSendPort = m_oSettings.getCommandPort();
+		
+		oExt_CommandOut.connect(String.format("tcp://%s:%d", m_oSettings.getAddress(), nCommandSendPort));
+		
+		m_oCommandHandler.setupConnections(null, oExt_CommandOut);
+		
 	}
 	
 	private void setupVideoConnection() {
@@ -248,7 +263,7 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 	}
 	
 	private void toggleCamera() {
-		m_oControl.toggleCamera();
+		m_oRemoteCtrl.toggleCamera();
 	}
 
 	@Override
