@@ -1,20 +1,15 @@
 package org.dobots.robotalk.user;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import org.dobots.robotalk.control.CommandHandler;
 import org.dobots.robotalk.control.ZmqRemoteControlHelper;
 import org.dobots.robotalk.control.ZmqRemoteListener;
-import org.dobots.robotalk.control.CommandHandler.CommandListener;
 import org.dobots.robotalk.video.VideoDisplayThread;
 import org.dobots.robotalk.video.VideoDisplayThread.FPSListener;
 import org.dobots.robotalk.video.VideoDisplayThread.VideoListener;
-import org.dobots.robotalk.video.VideoHandler;
 import org.dobots.robotalk.video.VideoTypes;
 import org.dobots.robotalk.zmq.ZmqHandler;
+import org.dobots.robotalk.zmq.ZmqMessageHandler;
 import org.dobots.robotalk.zmq.ZmqSettings;
-import org.dobots.robotalk.zmq.ZmqTypes;
+import org.dobots.robotalk.zmq.ZmqMessageHandler.ZmqMessageListener;
 import org.dobots.robotalk.zmq.ZmqSettings.SettingsChangeListener;
 import org.dobots.utilities.ScalableImageView;
 import org.dobots.utilities.Utils;
@@ -58,7 +53,6 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 	private ProgressDialog m_oConnectingProgressDialog;
 	
 	private WakeLock m_oWakeLock;
-	private ExecutorService m_oExecutor;
 	
 	// video
 	private ScalableImageView m_svVideo;
@@ -73,13 +67,13 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 
 	private boolean m_bOverride;
 	
-	private VideoHandler m_oVideoHandler;
+	private ZmqMessageHandler m_oVideoHandler_External;
 	
 	private ZmqHandler m_oZmqHandler;
 	private ZmqSettings m_oSettings;
 	
 	boolean m_bDebug = true;
-	private CommandHandler m_oCmdHandler_External;
+	private ZmqMessageHandler m_oCmdHandler_External;
 	
 	// flag defines if the received video frame should be scaled to the
 	// available image size
@@ -116,20 +110,18 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 
 		});
         
-        m_oVideoHandler = new VideoHandler(m_oZmqHandler.getContext());
-
-    	m_oCmdHandler_External = new CommandHandler(m_oZmqHandler);
+        m_oVideoHandler_External = new ZmqMessageHandler();
+    	m_oCmdHandler_External = new ZmqMessageHandler();
 
         if (m_oSettings.isValid()) {
             setupConnections();
         }
 
-    	m_oZmqRemoteListener = new ZmqRemoteListener(m_oCmdHandler_External);
+    	m_oZmqRemoteListener = new ZmqRemoteListener();
 
 		m_oRemoteCtrl = new ZmqRemoteControlHelper(this, null, m_oZmqRemoteListener);
         m_oRemoteCtrl.setProperties();
         m_oRemoteCtrl.setCameraControlListener(m_oZmqRemoteListener);
-//        m_oRemoteCtrl.setupCommandConnections();
 
 		PowerManager powerManager =
 				(PowerManager)getSystemService(Context.POWER_SERVICE);
@@ -137,11 +129,10 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 				powerManager.newWakeLock(PowerManager.FULL_WAKE_LOCK,
 						"Full Wake Lock");
 
-		m_oExecutor = Executors.newCachedThreadPool();
     }
 
 	private void closeConnections() {
-		m_oVideoHandler.closeConnections();
+		m_oVideoHandler_External.closeConnections();
 		m_oCmdHandler_External.closeConnections();
 	}
 
@@ -152,8 +143,6 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 	
 	private void setupCommandConnection() {
 
-//        m_oZmqHandler.setupCommandConnections();
-        
 		ZMQ.Socket oCommandOut = m_oZmqHandler.createSocket(ZMQ.PUSH);
 		
 		// obtain command ports from settings
@@ -164,13 +153,22 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 		
 		m_oCmdHandler_External.setupConnections(null, oCommandOut);
 
-        m_oCmdHandler_External.setCommandListener(new CommandListener() {
+		// link external with internal command handler. incoming commands in external are sent to
+		// internal, incoming commands on internal are sent to external
+        m_oCmdHandler_External.setIncomingMessageListener(new ZmqMessageListener() {
 			
 			@Override
-			public void onCommand(ZMsg i_oMsg) {
+			public void onMessage(ZMsg i_oMsg) {
 				m_oZmqHandler.getCommandHandler().sendZmsg(i_oMsg);
 			}
-		});        
+		});     
+        m_oZmqHandler.getCommandHandler().setIncomingMessageListener(new ZmqMessageListener() {
+			
+			@Override
+			public void onMessage(ZMsg i_oMsg) {
+				m_oCmdHandler_External.sendZmsg(i_oMsg);
+			}
+		});
         
 	}
 	
@@ -187,15 +185,35 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 		// subscribe to the partner's video
 		oExt_VideoIn.subscribe("".getBytes());
 
-		m_oVideoHandler.setupConnections(oExt_VideoIn, null);
+		// only receive video, we don't publish video ourselves
+		m_oVideoHandler_External.setupConnections(oExt_VideoIn, null);
 		
-		ZMQ.Socket oInt_VideoIn = m_oZmqHandler.createSocket(ZMQ.SUB);
-		oInt_VideoIn.connect(m_oVideoHandler.getIntVideoAddr());
-		oInt_VideoIn.subscribe("".getBytes());
-		m_oVideoDisplayer = new VideoDisplayThread(m_oZmqHandler.getContext().getContext(), oInt_VideoIn);
+		// link external with internal video handler. incoming video in external are sent to
+		// internal
+		m_oVideoHandler_External.setIncomingMessageListener(new ZmqMessageListener() {
+			
+			@Override
+			public void onMessage(ZMsg i_oMsg) {
+				m_oZmqHandler.getVideoHandler().sendZmsg(i_oMsg);
+			}
+		});     
+        m_oZmqHandler.getVideoHandler().setIncomingMessageListener(new ZmqMessageListener() {
+			
+			@Override
+			public void onMessage(ZMsg i_oMsg) {
+				m_oVideoHandler_External.sendZmsg(i_oMsg);
+			}
+		});
+
+		ZMQ.Socket oVideoRecvSocket = m_oZmqHandler.obtainVideoRecvSocket();
+		oVideoRecvSocket.subscribe("".getBytes());
+
+		// start a video display thread which receives video frames from the socket and displays them
+		m_oVideoDisplayer = new VideoDisplayThread(m_oZmqHandler.getContext().getContext(), oVideoRecvSocket);
 		m_oVideoDisplayer.setVideoListner(this);
 		m_oVideoDisplayer.setFPSListener(this);
 		m_oVideoDisplayer.start();
+		
 	}
     
     private void setProperties() {
