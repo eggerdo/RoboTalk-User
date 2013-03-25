@@ -4,8 +4,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.dobots.robotalk.control.CommandHandler;
-import org.dobots.robotalk.control.ZmqRemoteControl;
+import org.dobots.robotalk.control.ZmqRemoteControlHelper;
 import org.dobots.robotalk.control.ZmqRemoteListener;
+import org.dobots.robotalk.control.CommandHandler.CommandListener;
 import org.dobots.robotalk.video.VideoDisplayThread;
 import org.dobots.robotalk.video.VideoDisplayThread.FPSListener;
 import org.dobots.robotalk.video.VideoDisplayThread.VideoListener;
@@ -13,10 +14,12 @@ import org.dobots.robotalk.video.VideoHandler;
 import org.dobots.robotalk.video.VideoTypes;
 import org.dobots.robotalk.zmq.ZmqHandler;
 import org.dobots.robotalk.zmq.ZmqSettings;
+import org.dobots.robotalk.zmq.ZmqTypes;
 import org.dobots.robotalk.zmq.ZmqSettings.SettingsChangeListener;
 import org.dobots.utilities.ScalableImageView;
 import org.dobots.utilities.Utils;
 import org.zeromq.ZMQ;
+import org.zeromq.ZMsg;
 
 import android.app.Activity;
 import android.app.Dialog;
@@ -64,7 +67,7 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 	private boolean m_bSessionStarted = false;
 
 	// control
-	private ZmqRemoteControl m_oRemoteCtrl;
+	private ZmqRemoteControlHelper m_oRemoteCtrl;
 	
 	private Camera camera;
 
@@ -76,7 +79,7 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 	private ZmqSettings m_oSettings;
 	
 	boolean m_bDebug = true;
-	private CommandHandler m_oCommandHandler;
+	private CommandHandler m_oCmdHandler_External;
 	
 	// flag defines if the received video frame should be scaled to the
 	// available image size
@@ -115,16 +118,18 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
         
         m_oVideoHandler = new VideoHandler(m_oZmqHandler.getContext());
 
-    	m_oCommandHandler = new CommandHandler(m_oZmqHandler);
-    	m_oZmqRemoteListener = new ZmqRemoteListener(m_oCommandHandler);
-
-		m_oRemoteCtrl = new ZmqRemoteControl(this, null, m_oZmqRemoteListener);
-        m_oRemoteCtrl.setProperties();
-        m_oRemoteCtrl.setCameraControlListener(m_oZmqRemoteListener);
+    	m_oCmdHandler_External = new CommandHandler(m_oZmqHandler);
 
         if (m_oSettings.isValid()) {
             setupConnections();
         }
+
+    	m_oZmqRemoteListener = new ZmqRemoteListener(m_oCmdHandler_External);
+
+		m_oRemoteCtrl = new ZmqRemoteControlHelper(this, null, m_oZmqRemoteListener);
+        m_oRemoteCtrl.setProperties();
+        m_oRemoteCtrl.setCameraControlListener(m_oZmqRemoteListener);
+//        m_oRemoteCtrl.setupCommandConnections();
 
 		PowerManager powerManager =
 				(PowerManager)getSystemService(Context.POWER_SERVICE);
@@ -137,7 +142,7 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 
 	private void closeConnections() {
 		m_oVideoHandler.closeConnections();
-		m_oCommandHandler.closeConnections();
+		m_oCmdHandler_External.closeConnections();
 	}
 
 	private void setupConnections() {
@@ -146,17 +151,27 @@ public class RoboTalkActivity_User extends Activity implements VideoListener, FP
 	}
 	
 	private void setupCommandConnection() {
-		
-		ZMQ.Socket oExt_CommandOut = m_oZmqHandler.createSocket(ZMQ.PUSH);
+
+//        m_oZmqHandler.setupCommandConnections();
+        
+		ZMQ.Socket oCommandOut = m_oZmqHandler.createSocket(ZMQ.PUSH);
 		
 		// obtain command ports from settings
 		// receive port is always equal to send port + 1
-		int nCommandSendPort = m_oSettings.getCommandPort();
+		int nCommandOutPort = m_oSettings.getCommandPort();
 		
-		oExt_CommandOut.connect(String.format("tcp://%s:%d", m_oSettings.getAddress(), nCommandSendPort));
+		oCommandOut.connect(String.format("tcp://%s:%d", m_oSettings.getAddress(), nCommandOutPort));
 		
-		m_oCommandHandler.setupConnections(null, oExt_CommandOut);
-		
+		m_oCmdHandler_External.setupConnections(null, oCommandOut);
+
+        m_oCmdHandler_External.setCommandListener(new CommandListener() {
+			
+			@Override
+			public void onCommand(ZMsg i_oMsg) {
+				m_oZmqHandler.getCommandHandler().sendZmsg(i_oMsg);
+			}
+		});        
+        
 	}
 	
 	private void setupVideoConnection() {
